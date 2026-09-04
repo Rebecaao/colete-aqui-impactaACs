@@ -1,0 +1,29 @@
+# Dependências
+/node_modules/
+/vendor/
+
+# Arquivos de ambiente e segredos
+.env
+.env.local
+*.pem
+
+# Logs e arquivos temporários
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Pastas de build e compilação
+/dist/
+/build/
+/bin/
+/obj/
+
+# Arquivos de IDEs e Editores
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+.next
