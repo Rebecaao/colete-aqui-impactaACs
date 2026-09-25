@@ -1,11 +1,18 @@
+"use client";
+
 import React from "react";
 
 type ModalProtocoloProps = {
+  protocolo: string;
   mensagem: string;
   onClose: () => void;
 };
 
-export function ModalProtocolo({ mensagem, onClose }: ModalProtocoloProps) {
+export function ModalProtocolo({
+  protocolo,
+  mensagem,
+  onClose,
+}: ModalProtocoloProps) {
   return (
     <div
       style={{
@@ -35,24 +42,69 @@ export function ModalProtocolo({ mensagem, onClose }: ModalProtocoloProps) {
         }}
       >
         <h3
-          style={{ color: "#2c3e50", margin: "0 0 10px 0", fontSize: "22px" }}
+          style={{
+            color: "#2c3e50",
+            margin: "0 0 10px 0",
+            fontSize: "22px",
+            textAlign: "center",
+          }}
         >
-          Tudo Pronto!
+          Solicitação registrada com sucesso!
         </h3>
+
+        <p
+          style={{
+            color: "#555",
+            fontSize: "14px",
+            margin: "0 0 15px 0",
+            textAlign: "center",
+            lineHeight: "1.5",
+          }}
+        >
+          <strong>anote o seu número de protocolo</strong>
+        </p>
+
+        <div
+          style={{
+            backgroundColor: "#f4f6f7",
+            border: "2px dashed #27ae60",
+            borderRadius: "8px",
+            padding: "16px",
+            margin: "15px 0",
+            textAlign: "center",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "12px",
+              color: "#666",
+              display: "block",
+              marginBottom: "4px",
+            }}
+          >
+            Número do Protocolo:
+          </span>
+          <strong
+            style={{
+              fontSize: "20px",
+              color: "#27ae60",
+              fontFamily: "monospace",
+            }}
+          >
+            {protocolo}
+          </strong>
+        </div>
 
         <p
           style={{
             color: "#444",
             fontSize: "14px",
             margin: "0 0 20px 0",
-            lineHeight: "1.5",
+            lineHeight: "1.6",
           }}
         >
-          <strong style={{ color: "#27ae60" }}>{mensagem}</strong>
-          <br />
-          <br />
-          Fique de olho em seu telefone e e-mail informados. Entraremos em
-          contato em breve para confirmar a viabilidade da data sugerida.
+          Por favor, guarde esse protocolo para acompanhar sua solicitação.
+          Entraremos em contato em breve.
         </p>
 
         <button

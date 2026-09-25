@@ -1,9 +1,10 @@
+"use client";
 import React, { FormEvent, useState } from "react";
-import { InputForm } from "./InputForm";
-import { ModalProtocolo } from "./ModalProtocolo";
-import { ButtonForm } from "./ButtonForm";
+import { InputForm } from "../InputForm";
+import { ModalProtocolo } from "../ModalProtocolo";
+import { ButtonForm } from "../ButtonForm";
 
-type SolicitarSectionProps = {
+type SolicitarColetaProps = {
   onSubmitSuccess?: () => void;
 };
 
@@ -18,7 +19,7 @@ function calcularDataMinimaUteis() {
   return data.toISOString().split("T")[0];
 }
 
-export function SolicitarSection({ onSubmitSuccess }: SolicitarSectionProps) {
+export function SolicitarColeta({ onSubmitSuccess }: SolicitarColetaProps) {
   const [form, setForm] = useState({
     nome: "",
     telefone: "",
@@ -35,6 +36,7 @@ export function SolicitarSection({ onSubmitSuccess }: SolicitarSectionProps) {
   const [carregando, setCarregando] = useState(false);
 
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null);
+  const [protocoloGerado, setProtocoloGerado] = useState<string>("");
   const [errosApiGeral, setErrosApiGeral] = useState<string | null>(null);
   const [erros, setErros] = useState<Record<string, string>>({});
 
@@ -101,6 +103,7 @@ export function SolicitarSection({ onSubmitSuccess }: SolicitarSectionProps) {
       setMensagemSucesso(
         data.mensagem || "Sua solicitação de coleta foi enviada com sucesso!",
       );
+      setProtocoloGerado(data.dados?.protocolo || data.protocolo || "REC-XXXX");
       setForm({
         nome: "",
         telefone: "",
@@ -145,6 +148,7 @@ export function SolicitarSection({ onSubmitSuccess }: SolicitarSectionProps) {
     >
       {mensagemSucesso && (
         <ModalProtocolo
+          protocolo={protocoloGerado}
           mensagem={mensagemSucesso}
           onClose={() => setMensagemSucesso(null)}
         />

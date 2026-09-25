@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "../../../lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import { z } from "zod";
 
 const coletaSchema = z.object({
@@ -56,10 +56,6 @@ const coletaSchema = z.object({
     return dataSelecionada >= dataMinima;
   }, "A data sugerida deve ser de no mínimo 2 dias úteis a partir de hoje."),
 });
-
-export async function GET() {
-  return NextResponse.json({ status: "online" });
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -125,3 +121,107 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const protocolo = searchParams.get("protocolo");
+
+    if (!protocolo) {
+      return NextResponse.json(
+        { status: "online", mensagem: "Rota de solicitações ativa." },
+        { status: 200 },
+      );
+    }
+
+    const docRef = doc(db, "agendamentos", protocolo.trim().toUpperCase());
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      return NextResponse.json(
+        {
+          sucesso: false,
+          mensagem: "Nenhuma solicitação encontrada com este protocolo.",
+        },
+        { status: 404 },
+      );
+    }
+    const dadosDoc = docSnap.data();
+    const coletaFormatada = {
+      protocolo: dadosDoc.protocolo,
+      nomeCompleto: dadosDoc.nomeCompleto,
+      telefone: dadosDoc.telefone,
+      email: dadosDoc.email,
+      endereco: {
+        logradouro: dadosDoc.logradouro,
+        numero: dadosDoc.numero,
+        bairro: dadosDoc.bairro,
+        cidade: dadosDoc.cidade,
+      },
+      materiais: dadosDoc.materiais,
+      dataSugerida: dadosDoc.dataSugerida,
+      status: dadosDoc.status,
+      criadoEm: dadosDoc.criadoEm,
+    };
+
+    return NextResponse.json(
+      { sucesso: true, coleta: coletaFormatada },
+      { status: 200 },
+    );
+  } catch (error: any) {
+    console.error("Erro ao buscar no Firestore:", error);
+    return NextResponse.json(
+      { sucesso: false, mensagem: "Erro interno ao buscar a solicitação." },
+      { status: 500 },
+    );
+  }
+}
+
+// export async function PATCH(req: NextRequest) {
+//   try {
+//     const body = await req.json();
+//     const { protocolo } = body;
+
+//     if (!protocolo) {
+//       return NextResponse.json(
+//         { sucesso: false, mensagem: "Protocolo não informado." },
+//         { status: 400 },
+//       );
+//     }
+
+//     const docRef = doc(db, "agendamentos", protocolo.trim().toUpperCase());
+//     const docSnap = await getDoc(docRef);
+
+//     if (!docSnap.exists()) {
+//       return NextResponse.json(
+//         { sucesso: false, mensagem: "Solicitação não encontrada." },
+//         { status: 404 },
+//       );
+//     }
+
+//     const dadosAtuais = docSnap.data();
+
+//     if (dadosAtuais.status === "Cancelado") {
+//       return NextResponse.json(
+//         {
+//           sucesso: false,
+//           mensagem: "Esta solicitação já se encontra cancelada.",
+//         },
+//         { status: 400 },
+//       );
+//     }
+
+//     await updateDoc(docRef, { status: "Cancelado" });
+
+//     return NextResponse.json(
+//       { sucesso: true, mensagem: "Solicitação cancelada com sucesso." },
+//       { status: 200 },
+//     );
+//   } catch (error: any) {
+//     console.error("Erro ao cancelar solicitação:", error);
+//     return NextResponse.json(
+//       { sucesso: false, mensagem: "Erro interno ao cancelar a solicitação." },
+//       { status: 500 },
+//     );
+//   }
+// }

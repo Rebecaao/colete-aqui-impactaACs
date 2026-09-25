@@ -38,6 +38,20 @@ export default function Header({ paginaAtual, setPaginaAtual }: HeaderProps) {
         >
           Solicitar
         </button>
+        <button
+          onClick={() => setPaginaAtual("consultar")}
+          style={{
+            background: "none",
+            border: "none",
+            color: "white",
+            cursor: "pointer",
+            fontWeight: paginaAtual === "consultar" ? "bold" : "normal",
+            marginLeft: "15px",
+            fontSize: "16px",
+          }}
+        >
+          Consultar
+        </button>
       </nav>
     </header>
   );

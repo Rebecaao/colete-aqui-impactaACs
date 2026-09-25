@@ -1,11 +1,11 @@
 "use client";
-
 import React, { useState } from "react";
 import Header from "@/src/components/Header";
 import Footer from "@/src/components/Footer";
-import { SolicitarSection } from "@/src/components/Form";
+import { SolicitarColeta } from "@/src/components/pages/SolicitarColeta";
+import { ConsultarProtocolo } from "@/src/components/pages/ConsultarProtocolo";
 
-type Pagina = "inicio" | "solicitar";
+type Pagina = "inicio" | "solicitar" | "consultar";
 
 export default function Home() {
   const [paginaAtual, setPaginaAtual] = useState<Pagina>("inicio");
@@ -18,7 +18,6 @@ export default function Home() {
       />
 
       <main className="container">
-        {/* ABA INÍCIO */}
         {paginaAtual === "inicio" && (
           <>
             <section className="hero">
@@ -34,6 +33,12 @@ export default function Home() {
                   onClick={() => setPaginaAtual("solicitar")}
                 >
                   Solicitar Coleta
+                </button>
+                <button
+                  className="btn btn-secundario"
+                  onClick={() => setPaginaAtual("consultar")}
+                >
+                  Consultar Solicitação
                 </button>
               </div>
             </section>
@@ -58,8 +63,9 @@ export default function Home() {
           </>
         )}
 
-        {/* ABA SOLICITAR */}
-        {paginaAtual === "solicitar" && <SolicitarSection />}
+        {paginaAtual === "solicitar" && <SolicitarColeta />}
+
+        {paginaAtual === "consultar" && <ConsultarProtocolo />}
       </main>
 
       <Footer />
