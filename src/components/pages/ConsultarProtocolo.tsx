@@ -18,44 +18,66 @@ type DadosColeta = {
 };
 
 export function ConsultarProtocolo() {
-  const [protocoloBusca, setProtocoloBusca] = useState("");
+  const [termoBusca, setTermoBusca] = useState("");
+  const [resultadoUnico, setResultadoUnico] = useState<any>(null);
+  const [historicoColetas, setHistoricoColetas] = useState<any[] | null>(null);
+  const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
-  const [resultado, setResultado] = useState<DadosColeta | null>(null);
-  const [mensagemErro, setMensagemErro] = useState("");
   const [cancelando, setCancelando] = useState(false);
 
-  const handleSearch = async (e: FormEvent<HTMLFormElement>) => {
+  const formatarDataBrasileira = (dataStr: string) => {
+    if (!dataStr) return "";
+    const [ano, mes, dia] = dataStr.split("-");
+    if (!ano || !mes || !dia) return dataStr;
+    return `${dia}/${mes}/${ano}`;
+  };
+
+  const coresStatus: Record<string, { bg: string; text: string }> = {
+    Cancelado: { bg: "#f8d7da", text: "#721c24" },
+    Pendente: { bg: "#fff3cd", text: "#856404" },
+    Concluido: { bg: "#d4edda", text: "#155724" },
+  };
+
+  // Função única de busca (detecta se é e-mail ou protocolo)
+  const handleBuscaUnica = async (e: React.FormEvent) => {
     e.preventDefault();
+    const valor = termoBusca.trim();
+    if (!valor) return;
+
     setCarregando(true);
-    setMensagemErro("");
-    setResultado(null);
+    setErro("");
+    setResultadoUnico(null);
+    setHistoricoColetas(null);
+
+    // Identifica se o texto digitado contém "@" (é um e-mail) ou é um protocolo
+    const ehEmail = valor.includes("@");
+    const parametroQuery = ehEmail
+      ? `email=${encodeURIComponent(valor)}`
+      : `protocolo=${encodeURIComponent(valor)}`;
 
     try {
-      const resposta = await fetch(
-        `/api/coletas?protocolo=${encodeURIComponent(protocoloBusca.trim())}`,
-      );
-      const dados = await resposta.json();
+      const res = await fetch(`/api/coletas?${parametroQuery}`);
+      const data = await res.json();
 
-      if (!resposta.ok) {
-        throw new Error(dados.mensagem || "Solicitação não encontrada.");
+      if (!res.ok) {
+        throw new Error(data.mensagem || "Nenhum resultado encontrado.");
       }
 
-      setResultado(dados.coleta);
-    } catch (erro: any) {
-      setMensagemErro(erro.message || "Erro ao buscar a solicitação.");
+      if (ehEmail) {
+        setHistoricoColetas(data.coletas);
+      } else {
+        setResultadoUnico(data.coleta);
+      }
+    } catch (err: any) {
+      setErro(err.message || "Erro ao realizar a busca.");
     } finally {
       setCarregando(false);
     }
   };
-  const formatarDataBrasileira = (dataStr: string) => {
-    if (!dataStr) return "";
-    const [ano, mes, dia] = dataStr.split("-");
-    if (!ano || !mes || !dia) return dataStr; // Retorna original se não estiver no padrão esperado
-    return `${dia}/${mes}/${ano}`;
-  };
+
   const handleCancelar = async () => {
     if (
-      !resultado ||
+      !resultadoUnico ||
       !confirm("Tem certeza que deseja cancelar esta solicitação de coleta?")
     ) {
       return;
@@ -66,16 +88,14 @@ export function ConsultarProtocolo() {
       const resposta = await fetch("/api/coletas", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ protocolo: resultado.protocolo }),
+        body: JSON.stringify({ protocolo: resultadoUnico.protocolo }),
       });
 
       const dados = await resposta.json();
-
-      if (!resposta.ok) {
+      if (!resposta.ok)
         throw new Error(dados.mensagem || "Não foi possível cancelar.");
-      }
 
-      setResultado({ ...resultado, status: "Cancelado" });
+      setResultadoUnico({ ...resultadoUnico, status: "Cancelado" });
       alert("Solicitação cancelada com sucesso!");
     } catch (erro: any) {
       alert(erro.message || "Erro ao processar o cancelamento.");
@@ -83,33 +103,30 @@ export function ConsultarProtocolo() {
       setCancelando(false);
     }
   };
-  const coresStatus: Record<string, { bg: string; text: string }> = {
-    Cancelado: { bg: "#f8d7da", text: "#721c24" },
-    Pendente: { bg: "#fff3cd", text: "#856404" },
-    Concluido: { bg: "#d4edda", text: "#155724" },
-  };
 
-  const estiloStatus = resultado
-    ? coresStatus[resultado.status]
+  const estiloStatus = resultadoUnico
+    ? coresStatus[resultadoUnico.status] || coresStatus.Concluido
     : { bg: "#eee", text: "#333" };
 
   return (
-    <section
-      className="hero"
+    <div
       style={{
-        padding: "30px 20px",
         maxWidth: "600px",
         margin: "0 auto",
-        textAlign: "center",
+        background: "#fff",
+        padding: "20px",
+        borderRadius: "8px",
+        border: "1px solid #e1e8ed",
       }}
     >
       <h2>Consultar Solicitação</h2>
       <p style={{ color: "#666", fontSize: "14px" }}>
-        Digite o código do seu protocólo para acompanhar o status da coleta.
+        Digite o código do seu <strong>protocolo</strong> ou o seu{" "}
+        <strong>e-mail</strong> para acompanhar as coletas.
       </p>
 
       <form
-        onSubmit={handleSearch}
+        onSubmit={handleBuscaUnica}
         style={{
           marginTop: "20px",
           display: "flex",
@@ -121,14 +138,14 @@ export function ConsultarProtocolo() {
         <input
           type="text"
           required
-          value={protocoloBusca}
-          onChange={(e) => setProtocoloBusca(e.target.value)}
-          placeholder="Ex: REC-ABC1234"
+          value={termoBusca}
+          onChange={(e) => setTermoBusca(e.target.value)}
+          placeholder="Ex: REC-ABC1234 ou seu@email.com"
           style={{
             padding: "10px 12px",
             borderRadius: "5px",
             border: "1px solid #ccc",
-            width: "250px",
+            flex: 1,
             fontSize: "14px",
             outline: "none",
           }}
@@ -146,7 +163,7 @@ export function ConsultarProtocolo() {
         </button>
       </form>
 
-      {mensagemErro && (
+      {erro && (
         <div
           style={{
             marginTop: "20px",
@@ -157,11 +174,11 @@ export function ConsultarProtocolo() {
             fontSize: "14px",
           }}
         >
-          {mensagemErro}
+          {erro}
         </div>
       )}
 
-      {resultado && (
+      {resultadoUnico && (
         <div
           style={{
             marginTop: "25px",
@@ -190,7 +207,7 @@ export function ConsultarProtocolo() {
                 fontFamily: "monospace",
               }}
             >
-              Protocolo: {resultado.protocolo}
+              Protocolo: {resultadoUnico.protocolo}
             </span>
             <span
               style={{
@@ -202,7 +219,7 @@ export function ConsultarProtocolo() {
                 fontWeight: "bold",
               }}
             >
-              {resultado.status}
+              {resultadoUnico.status}
             </span>
           </div>
 
@@ -216,48 +233,138 @@ export function ConsultarProtocolo() {
             }}
           >
             <p style={{ margin: 0 }}>
-              <strong>Solicitante:</strong> {resultado.nomeCompleto}
+              <strong>Solicitante:</strong> {resultadoUnico.nomeCompleto}
             </p>
             <p style={{ margin: 0 }}>
-              <strong>Telefone:</strong> {resultado.telefone}
+              <strong>Telefone:</strong> {resultadoUnico.telefone}
             </p>
             <p style={{ margin: 0 }}>
-              <strong>Endereço:</strong> {resultado.endereco.logradouro}, nº{" "}
-              {resultado.endereco.numero} - {resultado.endereco.bairro},{" "}
-              {resultado.endereco.cidade}
+              <strong>E-mail:</strong> {resultadoUnico.email}
             </p>
             <p style={{ margin: 0 }}>
-              <strong>Materiais:</strong> {resultado.materiais.join(", ")}
+              <strong>Endereço:</strong> {resultadoUnico.endereco.logradouro},
+              nº {resultadoUnico.endereco.numero} -{" "}
+              {resultadoUnico.endereco.bairro}, {resultadoUnico.endereco.cidade}
+            </p>
+            <p style={{ margin: 0 }}>
+              <strong>Materiais:</strong> {resultadoUnico.materiais.join(", ")}
             </p>
             <p style={{ margin: 0 }}>
               <strong>Data Sugerida:</strong>{" "}
-              {formatarDataBrasileira(resultado.dataSugerida)}
+              {formatarDataBrasileira(resultadoUnico.dataSugerida)}
             </p>
           </div>
-          {/* {resultado.status !== "Cancelado" 
-          //&& (
-            // <button
-            //   onClick={handleCancelar}
-            //   disabled={cancelando}
-            //   style={{
-            //     marginTop: "15px",
-            //     width: "100%",
-            //     padding: "10px",
-            //     backgroundColor: "#e74c3c",
-            //     color: "#fff",
-            //     border: "none",
-            //     borderRadius: "6px",
-            //     fontSize: "14px",
-            //     fontWeight: "bold",
-            //     cursor: cancelando ? "not-allowed" : "pointer",
-            //   }}
-            // >
-            //   {cancelando ? "Cancelando..." : "Cancelar Solicitação"}
-            // </button>
-            
-          } */}
+
+          {/* {resultadoUnico.status !== "Cancelado" && (
+            <button
+              onClick={handleCancelar}
+              disabled={cancelando}
+              style={{
+                marginTop: "15px",
+                width: "100%",
+                padding: "10px",
+                backgroundColor: "#e74c3c",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "14px",
+                fontWeight: "bold",
+                cursor: cancelando ? "not-allowed" : "pointer",
+              }}
+            >
+              {cancelando ? "Cancelando..." : "Cancelar Solicitação"}
+            </button>
+          )} */}
         </div>
       )}
-    </section>
+
+      {/* Exibição do Histórico (Caso busque por E-mail) */}
+      {historicoColetas && (
+        <div
+          style={{
+            marginTop: "25px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "15px",
+          }}
+        >
+          <p
+            style={{
+              fontSize: "14px",
+              fontWeight: "bold",
+              color: "#333",
+              margin: 0,
+            }}
+          >
+            Encontradas {historicoColetas.length} solicitação(ões) para este
+            e-mail:
+          </p>
+          {historicoColetas.map((item) => {
+            const estiloItem =
+              coresStatus[item.status] || coresStatus.Concluido;
+            return (
+              <div
+                key={item.protocolo}
+                style={{
+                  background: "#fdfdfd",
+                  padding: "15px",
+                  borderRadius: "8px",
+                  border: "1px solid #e1e8ed",
+                  textAlign: "left",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "10px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      fontFamily: "monospace",
+                      color: "#555",
+                    }}
+                  >
+                    Protocolo: {item.protocolo}
+                  </span>
+                  <span
+                    style={{
+                      backgroundColor: estiloItem.bg,
+                      color: estiloItem.text,
+                      padding: "3px 8px",
+                      borderRadius: "12px",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {item.status}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: "13px",
+                    color: "#444",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  <p style={{ margin: 0 }}>
+                    <strong>Data:</strong>{" "}
+                    {formatarDataBrasileira(item.dataSugerida)}
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    <strong>Materiais:</strong> {item.materiais.join(", ")}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

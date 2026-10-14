@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "../../../lib/firebase";
-import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
 import { z } from "zod";
 
 const coletaSchema = z.object({
@@ -126,46 +135,94 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const protocolo = searchParams.get("protocolo");
+    const email = searchParams.get("email");
 
-    if (!protocolo) {
+    if (protocolo) {
+      const docRef = doc(db, "agendamentos", protocolo.trim().toUpperCase());
+      const docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        return NextResponse.json(
+          {
+            sucesso: false,
+            mensagem: "Nenhuma solicitação encontrada com este protocolo.",
+          },
+          { status: 404 },
+        );
+      }
+
+      const dadosDoc = docSnap.data();
+      const coletaFormatada = {
+        protocolo: dadosDoc.protocolo,
+        nomeCompleto: dadosDoc.nomeCompleto,
+        telefone: dadosDoc.telefone,
+        email: dadosDoc.email,
+        endereco: {
+          logradouro: dadosDoc.logradouro,
+          numero: dadosDoc.numero,
+          bairro: dadosDoc.bairro,
+          cidade: dadosDoc.cidade,
+        },
+        materiais: dadosDoc.materiais,
+        dataSugerida: dadosDoc.dataSugerida,
+        status: dadosDoc.status,
+        criadoEm: dadosDoc.criadoEm,
+      };
+
       return NextResponse.json(
-        { status: "online", mensagem: "Rota de solicitações ativa." },
+        { sucesso: true, coleta: coletaFormatada },
         { status: 200 },
       );
     }
 
-    const docRef = doc(db, "agendamentos", protocolo.trim().toUpperCase());
-    const docSnap = await getDoc(docRef);
-
-    if (!docSnap.exists()) {
-      return NextResponse.json(
-        {
-          sucesso: false,
-          mensagem: "Nenhuma solicitação encontrada com este protocolo.",
-        },
-        { status: 404 },
+    // 2. SE PASSOU E-MAIL: Busca histórico em lista
+    if (email) {
+      const q = query(
+        collection(db, "agendamentos"),
+        where("email", "==", email.trim().toLowerCase()),
       );
-    }
-    const dadosDoc = docSnap.data();
-    const coletaFormatada = {
-      protocolo: dadosDoc.protocolo,
-      nomeCompleto: dadosDoc.nomeCompleto,
-      telefone: dadosDoc.telefone,
-      email: dadosDoc.email,
-      endereco: {
-        logradouro: dadosDoc.logradouro,
-        numero: dadosDoc.numero,
-        bairro: dadosDoc.bairro,
-        cidade: dadosDoc.cidade,
-      },
-      materiais: dadosDoc.materiais,
-      dataSugerida: dadosDoc.dataSugerida,
-      status: dadosDoc.status,
-      criadoEm: dadosDoc.criadoEm,
-    };
+      const querySnapshot = await getDocs(q);
 
+      if (querySnapshot.empty) {
+        return NextResponse.json(
+          {
+            sucesso: false,
+            mensagem: "Nenhuma solicitação encontrada para este e-mail.",
+          },
+          { status: 404 },
+        );
+      }
+
+      const coletas: any[] = [];
+      querySnapshot.forEach((docSnap) => {
+        const dadosDoc = docSnap.data();
+        coletas.push({
+          protocolo: dadosDoc.protocolo,
+          nomeCompleto: dadosDoc.nomeCompleto,
+          telefone: dadosDoc.telefone,
+          email: dadosDoc.email,
+          endereco: {
+            logradouro: dadosDoc.logradouro,
+            numero: dadosDoc.numero,
+            bairro: dadosDoc.bairro,
+            cidade: dadosDoc.cidade,
+          },
+          materiais: dadosDoc.materiais,
+          dataSugerida: dadosDoc.dataSugerida,
+          status: dadosDoc.status,
+          criadoEm: dadosDoc.criadoEm,
+        });
+      });
+
+      return NextResponse.json({ sucesso: true, coletas }, { status: 200 });
+    }
+
+    // Retorno padrão caso nenhum parâmetro seja enviado
     return NextResponse.json(
-      { sucesso: true, coleta: coletaFormatada },
+      {
+        status: "online",
+        mensagem: "Informe 'protocolo' ou 'email' para realizar a busca.",
+      },
       { status: 200 },
     );
   } catch (error: any) {
@@ -176,7 +233,6 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
 // export async function PATCH(req: NextRequest) {
 //   try {
 //     const body = await req.json();
