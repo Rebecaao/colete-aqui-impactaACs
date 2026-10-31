@@ -1,29 +1,13 @@
-import React, { FormEvent, useState } from "react";
-
-type DadosColeta = {
-  protocolo: string;
-  nomeCompleto: string;
-  telefone: string;
-  email?: string;
-  endereco: {
-    logradouro: string;
-    numero: string;
-    bairro: string;
-    cidade: string;
-  };
-  materiais: string[];
-  dataSugerida: string;
-  status: string;
-  criadoEm: string;
-};
+import { useState } from "react";
 
 export function ConsultarProtocolo() {
   const [termoBusca, setTermoBusca] = useState("");
+  const [statusFiltro, setStatusFiltro] = useState("TODOS");
+
   const [resultadoUnico, setResultadoUnico] = useState<any>(null);
   const [historicoColetas, setHistoricoColetas] = useState<any[] | null>(null);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
-  const [cancelando, setCancelando] = useState(false);
 
   const formatarDataBrasileira = (dataStr: string) => {
     if (!dataStr) return "";
@@ -31,82 +15,118 @@ export function ConsultarProtocolo() {
     if (!ano || !mes || !dia) return dataStr;
     return `${dia}/${mes}/${ano}`;
   };
-
-  const coresStatus: Record<string, { bg: string; text: string }> = {
-    Cancelado: { bg: "#f8d7da", text: "#721c24" },
-    Pendente: { bg: "#fff3cd", text: "#856404" },
-    Concluido: { bg: "#d4edda", text: "#155724" },
+  const formatarDataHora = (dataStr: string) => {
+    if (!dataStr) return "";
+    try {
+      const data = new Date(dataStr);
+      return data.toLocaleDateString("pt-BR");
+    } catch {
+      return dataStr;
+    }
   };
 
-  // Função única de busca (detecta se é e-mail ou protocolo)
-  const handleBuscaUnica = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const coresStatus: Record<string, { bg: string; text: string }> = {
+    Pendente: { bg: "#fff3cd", text: "#856404" },
+    Agendado: { bg: "#cce5ff", text: "#004085" },
+    Concluido: { bg: "#d4edda", text: "#155724" },
+    Cancelado: { bg: "#f8d7da", text: "#721c24" },
+  };
+
+  const realizarBusca = async (statusManual?: string) => {
     const valor = termoBusca.trim();
     if (!valor) return;
 
     setCarregando(true);
     setErro("");
-    setResultadoUnico(null);
-    setHistoricoColetas(null);
 
-    // Identifica se o texto digitado contém "@" (é um e-mail) ou é um protocolo
     const ehEmail = valor.includes("@");
-    const parametroQuery = ehEmail
+
+    const statusAplicado =
+      statusManual !== undefined ? statusManual : statusFiltro;
+
+    let parametroQuery = ehEmail
       ? `email=${encodeURIComponent(valor)}`
       : `protocolo=${encodeURIComponent(valor)}`;
+
+    if (ehEmail && statusAplicado !== "TODOS") {
+      parametroQuery += `&status=${encodeURIComponent(statusAplicado)}`;
+    }
 
     try {
       const res = await fetch(`/api/coletas?${parametroQuery}`);
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.mensagem || "Nenhum resultado encontrado.");
+        if (ehEmail) {
+          setHistoricoColetas([]);
+          setResultadoUnico(null);
+        } else {
+          setResultadoUnico(null);
+          setHistoricoColetas(null);
+        }
+        setErro(data.mensagem || "Nenhum resultado encontrado.");
+        return;
       }
 
       if (ehEmail) {
-        setHistoricoColetas(data.coletas);
+        setResultadoUnico(null);
+        setHistoricoColetas(data.coletas || []);
       } else {
+        setHistoricoColetas(null);
         setResultadoUnico(data.coleta);
       }
     } catch (err: any) {
-      setErro(err.message || "Erro ao realizar a busca.");
+      setErro("Erro ao conectar com o servidor.");
     } finally {
       setCarregando(false);
     }
   };
 
-  const handleCancelar = async () => {
-    if (
-      !resultadoUnico ||
-      !confirm("Tem certeza que deseja cancelar esta solicitação de coleta?")
-    ) {
+  const handleBuscaForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    realizarBusca();
+  };
+  const handleCancelar = async (protocolo: string) => {
+    const motivo = window.prompt(
+      "Digite o motivo do cancelamento (mínimo de 5 caracteres):",
+    );
+
+    if (motivo === null) return;
+
+    const motivoFormatado = motivo.trim();
+
+    if (motivoFormatado.length < 5) {
+      alert("O motivo deve ter pelo menos 5 caracteres.");
       return;
     }
 
-    setCancelando(true);
+    setCarregando(true);
+
     try {
-      const resposta = await fetch("/api/coletas", {
+      const res = await fetch("/api/coletas", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ protocolo: resultadoUnico.protocolo }),
+        body: JSON.stringify({
+          protocolo: protocolo.trim(),
+          motivoCancelamento: motivoFormatado,
+        }),
       });
 
-      const dados = await resposta.json();
-      if (!resposta.ok)
-        throw new Error(dados.mensagem || "Não foi possível cancelar.");
+      const data = await res.json();
 
-      setResultadoUnico({ ...resultadoUnico, status: "Cancelado" });
+      if (!res.ok) {
+        alert(data.mensagem || "Erro ao cancelar.");
+        return;
+      }
+
       alert("Solicitação cancelada com sucesso!");
-    } catch (erro: any) {
-      alert(erro.message || "Erro ao processar o cancelamento.");
+      realizarBusca();
+    } catch (err) {
+      alert("Falha de conexão com o servidor.");
     } finally {
-      setCancelando(false);
+      setCarregando(false);
     }
   };
-
-  const estiloStatus = resultadoUnico
-    ? coresStatus[resultadoUnico.status] || coresStatus.Concluido
-    : { bg: "#eee", text: "#333" };
 
   return (
     <div
@@ -121,19 +141,13 @@ export function ConsultarProtocolo() {
     >
       <h2>Consultar Solicitação</h2>
       <p style={{ color: "#666", fontSize: "14px" }}>
-        Digite o código do seu <strong>protocolo</strong> ou o seu{" "}
-        <strong>e-mail</strong> para acompanhar as coletas.
+        Digite seu <strong>protocolo</strong> ou <strong>e-mail</strong> para
+        acompanhar as coletas.
       </p>
 
       <form
-        onSubmit={handleBuscaUnica}
-        style={{
-          marginTop: "20px",
-          display: "flex",
-          gap: "10px",
-          justifyContent: "center",
-          flexWrap: "wrap",
-        }}
+        onSubmit={handleBuscaForm}
+        style={{ marginTop: "20px", display: "flex", gap: "10px" }}
       >
         <input
           type="text"
@@ -153,10 +167,14 @@ export function ConsultarProtocolo() {
         <button
           type="submit"
           disabled={carregando}
-          className="btn btn-secundario"
           style={{
             cursor: carregando ? "not-allowed" : "pointer",
             padding: "10px 20px",
+            borderRadius: "5px",
+            border: "none",
+            backgroundColor: "#2ecc71",
+            color: "#fff",
+            fontWeight: "bold",
           }}
         >
           {carregando ? "Buscando..." : "Buscar"}
@@ -166,12 +184,12 @@ export function ConsultarProtocolo() {
       {erro && (
         <div
           style={{
-            marginTop: "20px",
-            padding: "12px",
+            marginTop: "15px",
+            padding: "10px",
             backgroundColor: "#ffebee",
             color: "#c62828",
-            borderRadius: "6px",
-            fontSize: "14px",
+            borderRadius: "5px",
+            fontSize: "13px",
           }}
         >
           {erro}
@@ -181,12 +199,10 @@ export function ConsultarProtocolo() {
       {resultadoUnico && (
         <div
           style={{
-            marginTop: "25px",
-            textAlign: "left",
-            background: "#ffffff",
-            padding: "20px",
+            marginTop: "20px",
+            padding: "15px",
+            background: "#fff",
             borderRadius: "8px",
-            boxShadow: "0 4px 15px rgba(0,0,0,0.08)",
             border: "1px solid #e1e8ed",
           }}
         >
@@ -194,28 +210,20 @@ export function ConsultarProtocolo() {
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "15px",
-              borderBottom: "1px solid #eee",
-              paddingBottom: "10px",
+              marginBottom: "10px",
             }}
           >
-            <span
-              style={{
-                fontSize: "13px",
-                color: "#777",
-                fontFamily: "monospace",
-              }}
-            >
+            <span style={{ fontSize: "12px", fontFamily: "monospace" }}>
               Protocolo: {resultadoUnico.protocolo}
             </span>
             <span
               style={{
-                backgroundColor: estiloStatus.bg,
-                color: estiloStatus.text,
-                padding: "4px 10px",
-                borderRadius: "12px",
-                fontSize: "12px",
+                backgroundColor:
+                  coresStatus[resultadoUnico.status]?.bg || "#eee",
+                color: coresStatus[resultadoUnico.status]?.text || "#333",
+                padding: "2px 8px",
+                borderRadius: "10px",
+                fontSize: "11px",
                 fontWeight: "bold",
               }}
             >
@@ -223,146 +231,225 @@ export function ConsultarProtocolo() {
             </span>
           </div>
 
-          <div
-            style={{
-              fontSize: "14px",
-              color: "#333",
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-            }}
-          >
-            <p style={{ margin: 0 }}>
-              <strong>Solicitante:</strong> {resultadoUnico.nomeCompleto}
-            </p>
-            <p style={{ margin: 0 }}>
-              <strong>Telefone:</strong> {resultadoUnico.telefone}
-            </p>
-            <p style={{ margin: 0 }}>
-              <strong>E-mail:</strong> {resultadoUnico.email}
-            </p>
-            <p style={{ margin: 0 }}>
-              <strong>Endereço:</strong> {resultadoUnico.endereco.logradouro},
-              nº {resultadoUnico.endereco.numero} -{" "}
-              {resultadoUnico.endereco.bairro}, {resultadoUnico.endereco.cidade}
-            </p>
-            <p style={{ margin: 0 }}>
-              <strong>Materiais:</strong> {resultadoUnico.materiais.join(", ")}
-            </p>
-            <p style={{ margin: 0 }}>
-              <strong>Data Sugerida:</strong>{" "}
-              {formatarDataBrasileira(resultadoUnico.dataSugerida)}
-            </p>
-          </div>
+          <p style={{ margin: "4px 0", fontSize: "13px" }}>
+            <strong>Solicitante:</strong> {resultadoUnico.nomeCompleto}
+          </p>
+          <p style={{ margin: "4px 0", fontSize: "13px" }}>
+            <strong>Materiais:</strong> {resultadoUnico.materiais.join(", ")}
+          </p>
+          <p style={{ margin: "4px 0", fontSize: "13px" }}>
+            <strong>Data Sugerida:</strong>{" "}
+            {formatarDataBrasileira(resultadoUnico.dataSugerida)}
+          </p>
 
-          {/* {resultadoUnico.status !== "Cancelado" && (
-            <button
-              onClick={handleCancelar}
-              disabled={cancelando}
+          {resultadoUnico.status === "Cancelado" && (
+            <div
               style={{
-                marginTop: "15px",
+                marginTop: "8px",
+                padding: "8px",
+                background: "#fdf3f2",
+                borderRadius: "4px",
+                fontSize: "12px",
+                color: "#721c24",
+              }}
+            >
+              {resultadoUnico.motivoCancelamento && (
+                <p style={{ margin: "2px 0" }}>
+                  <strong>Motivo:</strong> {resultadoUnico.motivoCancelamento}
+                </p>
+              )}
+              {resultadoUnico.canceladoEm && (
+                <p style={{ margin: "2px 0" }}>
+                  <strong>Cancelado em:</strong>{" "}
+                  {formatarDataHora(resultadoUnico.canceladoEm)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {resultadoUnico.status === "Pendente" && (
+            <button
+              type="button"
+              onClick={() => handleCancelar(resultadoUnico.protocolo)}
+              style={{
+                marginTop: "12px",
                 width: "100%",
-                padding: "10px",
+                padding: "8px",
                 backgroundColor: "#e74c3c",
                 color: "#fff",
                 border: "none",
-                borderRadius: "6px",
-                fontSize: "14px",
+                borderRadius: "5px",
+                fontSize: "13px",
                 fontWeight: "bold",
-                cursor: cancelando ? "not-allowed" : "pointer",
+                cursor: "pointer",
               }}
             >
-              {cancelando ? "Cancelando..." : "Cancelar Solicitação"}
+              Cancelar Solicitação
             </button>
-          )} */}
+          )}
         </div>
       )}
 
-      {/* Exibição do Histórico (Caso busque por E-mail) */}
       {historicoColetas && (
-        <div
-          style={{
-            marginTop: "25px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "15px",
-          }}
-        >
-          <p
+        <div style={{ marginTop: "20px" }}>
+          <div
             style={{
-              fontSize: "14px",
-              fontWeight: "bold",
-              color: "#333",
-              margin: 0,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "10px",
             }}
           >
-            Encontradas {historicoColetas.length} solicitação(ões) para este
-            e-mail:
-          </p>
-          {historicoColetas.map((item) => {
-            const estiloItem =
-              coresStatus[item.status] || coresStatus.Concluido;
-            return (
-              <div
-                key={item.protocolo}
-                style={{
-                  background: "#fdfdfd",
-                  padding: "15px",
-                  borderRadius: "8px",
-                  border: "1px solid #e1e8ed",
-                  textAlign: "left",
-                }}
-              >
+            <div>
+              <h3 style={{ margin: 0, fontSize: "16px", color: "#333" }}>
+                Histórico de Solicitações
+              </h3>
+              <span style={{ fontSize: "12px", color: "#666" }}>
+                {historicoColetas.length}{" "}
+                {historicoColetas.length === 1
+                  ? "registro encontrado"
+                  : "registros encontrados"}
+              </span>
+            </div>
+
+            <select
+              value={statusFiltro}
+              onChange={(e) => setStatusFiltro(e.target.value)}
+              style={{
+                padding: "6px 10px",
+                borderRadius: "4px",
+                border: "1px solid #ccc",
+                fontSize: "12px",
+                outline: "none",
+                cursor: "pointer",
+              }}
+            >
+              <option value="TODOS">Todos os status</option>
+              <option value="Pendente">Pendente</option>
+              <option value="Agendado">Agendado</option>
+              <option value="Concluido">Concluído</option>
+              <option value="Cancelado">Cancelado</option>
+            </select>
+          </div>
+
+          {historicoColetas.length === 0 && (
+            <p style={{ color: "#666", fontSize: "13px" }}>
+              Nenhuma solicitação encontrada para o filtro selecionado.
+            </p>
+          )}
+
+          <div
+            style={{
+              maxHeight: "350px",
+              overflowY: "auto",
+              paddingRight: "6px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            {historicoColetas.map((item) => {
+              const estiloItem = coresStatus[item.status] || {
+                bg: "#eee",
+                text: "#333",
+              };
+              return (
                 <div
+                  key={item.protocolo}
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "10px",
+                    background: "#fdfdfd",
+                    padding: "12px",
+                    borderRadius: "6px",
+                    border: "1px solid #e1e8ed",
                   }}
                 >
-                  <span
+                  <div
                     style={{
-                      fontSize: "12px",
-                      fontFamily: "monospace",
-                      color: "#555",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: "6px",
                     }}
                   >
-                    Protocolo: {item.protocolo}
-                  </span>
-                  <span
-                    style={{
-                      backgroundColor: estiloItem.bg,
-                      color: estiloItem.text,
-                      padding: "3px 8px",
-                      borderRadius: "12px",
-                      fontSize: "11px",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    {item.status}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    fontSize: "13px",
-                    color: "#444",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <p style={{ margin: 0 }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontFamily: "monospace",
+                        color: "#666",
+                      }}
+                    >
+                      {item.protocolo}
+                    </span>
+                    <span
+                      style={{
+                        backgroundColor: estiloItem.bg,
+                        color: estiloItem.text,
+                        padding: "2px 6px",
+                        borderRadius: "8px",
+                        fontSize: "10px",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {item.status}
+                    </span>
+                  </div>
+
+                  <p style={{ margin: "2px 0", fontSize: "12px" }}>
                     <strong>Data:</strong>{" "}
                     {formatarDataBrasileira(item.dataSugerida)}
                   </p>
-                  <p style={{ margin: 0 }}>
+                  <p style={{ margin: "2px 0", fontSize: "12px" }}>
                     <strong>Materiais:</strong> {item.materiais.join(", ")}
                   </p>
+
+                  {item.status === "Cancelado" && (
+                    <div
+                      style={{
+                        marginTop: "6px",
+                        padding: "6px",
+                        background: "#fdf3f2",
+                        borderRadius: "4px",
+                        fontSize: "11px",
+                        color: "#721c24",
+                      }}
+                    >
+                      {item.motivoCancelamento && (
+                        <p style={{ margin: "2px 0" }}>
+                          <strong>Motivo:</strong> {item.motivoCancelamento}
+                        </p>
+                      )}
+                      {item.canceladoEm && (
+                        <p style={{ margin: "2px 0" }}>
+                          <strong>Cancelado em:</strong>{" "}
+                          {formatarDataHora(item.canceladoEm)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {item.status === "Pendente" && (
+                    <button
+                      type="button"
+                      onClick={() => handleCancelar(item.protocolo)}
+                      style={{
+                        marginTop: "8px",
+                        width: "100%",
+                        padding: "6px",
+                        backgroundColor: "#e74c3c",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "4px",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Cancelar Solicitação
+                    </button>
+                  )}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
