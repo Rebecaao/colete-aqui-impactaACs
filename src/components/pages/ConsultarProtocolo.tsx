@@ -394,7 +394,7 @@ export function ConsultarProtocolo() {
                   </div>
 
                   <p style={{ margin: "2px 0", fontSize: "12px" }}>
-                    <strong>Data:</strong>{" "}
+                    <strong>Data escolhida para coleta:</strong>{" "}
                     {formatarDataBrasileira(item.dataSugerida)}
                   </p>
                   <p style={{ margin: "2px 0", fontSize: "12px" }}>

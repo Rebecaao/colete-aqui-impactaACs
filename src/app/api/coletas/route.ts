@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "../../../lib/firebase";
+import { enviarEmailConfirmacao } from "@/src/lib/email";
 import {
   collection,
   doc,
@@ -149,11 +150,22 @@ export async function POST(req: Request) {
 
     const docRef = doc(db, "agendamentos", protocolo);
     await setDoc(docRef, novaColeta);
+    try {
+      await enviarEmailConfirmacao({
+        para: novaColeta.email,
+        nomeCompleto: novaColeta.nomeCompleto,
+        protocolo: novaColeta.protocolo,
+        dataSugerida: novaColeta.dataSugerida,
+        materiais: novaColeta.materiais,
+      });
+    } catch (emailError) {
+      console.error("Falha ao enviar e-mail de confirmação:", emailError);
+    }
 
     return NextResponse.json(
       {
         sucesso: true,
-        mensagem: "Solicitação criada com sucesso!",
+        mensagem: `Solicitação registrada! Enviamos o protocolo para o e-mail ${novaColeta.email}. Aguarde a confirmação da nossa equipe.`,
         protocolo,
         coleta: novaColeta,
       },

@@ -61,7 +61,7 @@ export function ModalProtocolo({
             lineHeight: "1.5",
           }}
         >
-          <strong>anote o seu número de protocolo</strong>
+          <strong>{mensagem}</strong>
         </p>
 
         <div

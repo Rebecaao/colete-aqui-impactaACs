@@ -101,7 +101,8 @@ export function SolicitarColeta({ onSubmitSuccess }: SolicitarColetaProps) {
       }
 
       setMensagemSucesso(
-        data.mensagem || "Sua solicitação de coleta foi enviada com sucesso!",
+        data.mensagem ||
+          `Sua solicitação foi registrada com sucesso! Enviamos uma cópia do protocolo e os detalhes do agendamento para ${form.email}. Aguarde o contato da nossa equipe para confirmar a rota.`,
       );
       setProtocoloGerado(data.dados?.protocolo || data.protocolo || "REC-XXXX");
       setForm({
